@@ -19,7 +19,12 @@ const routes = [
          {
             path: '/electricity',
             name: 'electricity',
-            component: () => import('../views/DTHRecharge.vue')
+            component: () => import('../views/ElectricityPayment.vue'),
+         },
+         {
+            path: '/payment-done/:service/:id',
+            name: 'paymentDone',
+            component: () => import('../views/PaymentDone.vue'),
          },
          {
             path: '/dth',
