@@ -7,7 +7,7 @@
           <option
             v-for="(option, i) in operators"
             :key="i"
-            :value="option.code"
+            :value="option.id"
             v-text="option.name"
           ></option>
         </select>
