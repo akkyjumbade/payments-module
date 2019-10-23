@@ -1,54 +1,68 @@
 <template>
   <div class="mobile_recharge_form">
-    <div >
+    <div v-if="operators">
       <div class="form-group">
         <label for>Select Operator</label>
-        <select v-model="values.operator" class="form-control">
-          <option
-            v-for="(option, i) in operators"
-            :key="i"
-            :value="option.id"
-            v-text="option.name"
-          ></option>
-        </select>
+        <v-select :options="operators" v-model="values.provider_id" label="name" value="id">
+          <template slot="option" slot-scope="option">
+            {{ option.name }}
+          </template>
+        </v-select>
       </div>
-      <div class="form-group" style="max-width: 200px">
-        <label>Customer number</label>
-        <input
-          v-model="values.customer_id"
-          name="customer_number"
-          required
-          placeholder="Customer number"
-          class="form-control"
-        />
+      <div class="row">
+        <div class="form-group col-xs-8">
+          <label>Customer number</label>
+          <input
+            v-model="values.customer_id"
+            name="customer_id"
+            required
+            placeholder="Customer number"
+            class="form-control"
+          />
+        </div>
+        <div class="form-group col-xs-4">
+          <label>Billing Unit</label>
+          <input
+            v-model="values.billing_unit"
+            name="billing_unit"
+            required
+            placeholder="Billing Unit"
+            class="form-control"
+          />
+        </div>
       </div>
-      <div class="form-group" style="max-width: 200px">
-        <label>Billing Unit</label>
-        <input
-          v-model="values.billing_unit"
-          name="billing_unit"
-          required
-          placeholder="Billing Unit"
-          class="form-control"
-        />
-      </div>
-      <div class="form-group" style="max-width: 100px">
-        <label>Amount</label>
-        <input
-          v-model="values.amount"
-          name="amount"
-          type="number"
-          min="1"
-          required
-          placeholder
-          class="form-control"
-        />
-      </div>
-      <button class="btn btn" @click.prevent="onPaymentClicked">Proceed to Pay</button>
+      <!-- <div class="checkbox">
+        <label>
+          <input
+            type="checkbox"
+            v-model="values.redeemFromWallet"
+            name="redeemFromWallet"
+            id="redeemFromWallet"
+          />
+          <span>Redeem from wallet</span>
+        </label>
+      </div> -->
+      <button class="btn btn" :class="{'loading': loading}" :disabled="loading" @click.prevent="onPaymentClicked">Proceed to Pay</button>
     </div>
   </div>
 </template>
 <script>
+// import { async } from 'q';
+// import Axios from 'axios'
+const popupCustomClass = {
+    header: 'text-left',
+    title: 'text-left',
+    content: 'text-left text',
+    footer: 'text-left text',
+    input: 'form-control',
+}
+import Swal from 'sweetalert2'
+Swal.mixin({
+    animation: false,
+    buttonsStyling: false,
+    showConfirmButton: false,
+    customClass: popupCustomClass
+})
 export default {
   props: {
     operators: {
@@ -66,70 +80,95 @@ export default {
   },
   data: function() {
     return {
-      values: [],
+      values: {},
       orderId: null,
+      loading: false,
+      billDetails: null,
       api: null,
       paymentId: null
     };
   },
   methods: {
-    async fetchNewOrder() {
-      let orderIdFromSession = localStorage.getItem("order_id");
-      if (orderIdFromSession) {
-        this.orderId = orderIdFromSession;
-        return false;
-      } else {
-        try {
-          const { data } = await this.$http.get(
-            "/wp-json/app/electricity_order_create"
-          );
-          console.log("order");
-          console.log({ data });
-          this.orderId = data.data;
-          localStorage.setItem("order_id", this.orderId);
-          console.log("order store");
-        } catch (error) {
-          console.log({ error });
-        }
-      }
+    async generateOrder() {
+        return new Promise(async (resolve, reject) => {
+            try {
+                const { data } = await this.$http.get(
+                    "/wp-json/app/electricity_order_create"
+                );
+                if(data.ok) {
+                    resolve(data.data)
+                } else {
+                    reject(data)
+                }
+            } catch (error) {
+                reject(error)
+            }
+        })
+    },
+    async fetchBill() {
+        return new Promise(async (resolve, reject) => {
+            try {
+                // const apiToken = window.apiToken ? window.apiToken: ''
+                const {data} = await this.$http.post('wp-json/app/fetch-bill', this.values)
+                console.log({data})
+                if(data.ok) {
+                    return resolve(data.data)
+                } else {
+                    return reject(data)
+                }
+            } catch (error) {
+                return reject(error)
+            }
+        })
     },
     async onPaymentClicked() {
-      var options = {
-        key: "rzp_live_nXRYq90cXI0BAG", // Enter the Key ID generated from the Dashboard
-        amount: this.values.amount, // Amount is in currency subunits. Default currency is INR. Hence, 50000 refers to 50000 paise or INR 500.
-        currency: "INR",
-        order_id: this.orderId,
-        //This is a sample Order ID. Create an Order using Orders API. (https://razorpay.com/docs/payment-gateway/orders/integration/#step-1-create-an-order). Refer the Checkout form table given below
-        handler: response => {
-          this.doBillPayment(response);
-        },
-        prefill: {...this.$props.user, contact: this.$props.user.phone},
-        notes: {
-          address: this.$props.orderNote
-        },
-      };
-      this.api = new window.Razorpay(options);
-      this.api.open();
+        this.loading = true
+        const fetching = Swal.fire({
+            title: 'Fetching your bill details...',
+        })
+        const bill = await this.fetchBill();
+        if(!bill) {
+            // bill not found
+            // alert('')
+            return
+        }
+        fetching.close()
+        Swal.fire({
+            title: 'Bill details',
+            html: `
+            Customer name: ${bill.name}<br>
+            Amount: ${bill.amount}<br>
+            Due date: ${bill.duedate}<br>
+            `,
+            confirmButtonText: 'Pay Now',
+        }).then(result => {
+            if(result) {
+                const order = await this.generateOrder()
+                this.$store.dispatch('setNewOrder', order)
+                this.$router.push({path: '/payment'})
+            }
+        })
+
     },
     async doBillPayment(response) {
-       let formdata = {
-          ...this.values,
-          ...response,
-          user: this.$props.user,
-          orderId: this.orderId,
-       }
+      let formdata = {
+        ...this.values,
+        ...response,
+        user: this.$props.user,
+        orderId: this.orderId
+      };
       try {
         const paymentURL = "/wp-json/app/do_electricity_payment_now";
         const { data } = await this.$http.post(paymentURL, formdata);
         console.log({ data });
         if (data && data.ok) {
-           this.$router.push({
-              name: 'paymentDone',
-              params: {
-                 service: 'electricity',
-                 id: data.transaction_id
-              }
-           })
+          this.$router.push({
+            name: "paymentDone",
+            params: {
+              service: "electricity",
+              id: data.transaction_id
+            }
+          });
           // wow
         }
       } catch (error) {
@@ -149,8 +188,20 @@ export default {
       }
     }
   },
-  mounted() {}
+  mounted() {
+  }
 };
 </script>
 <style scoped>
+.loading {
+    position: relative;
+}
+.loading:before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+}
 </style>

@@ -3,6 +3,10 @@ import App from './App.vue'
 import router from './router'
 import store from './store'
 import Axios from 'axios'
+import vSelect from 'vue-select'
+import 'vue-select/dist/vue-select.css';
+Vue.component('v-select', vSelect)
+
 Vue.prototype.$http = Axios.create({
    baseURL: 'https://stpatil.com/'
 })
