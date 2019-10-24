@@ -1,16 +1,16 @@
 <template>
   <div class="payment_response">
      <div class="container">
-        <div v-if="succes" class="alert alert-success">
+        <div v-if="response && response.statusCode == 'success'" class="alert alert-success">
          <h3 class="">Transaction successful</h3>
          <p>
-
+            {{response}}
          </p>
       </div>
       <div v-else class="alert alert-danger">
          <h3 class="">Transaction failed</h3>
          <p>
-            Something went wrong
+            {{response}}
          </p>
       </div>
      </div>
@@ -24,7 +24,12 @@ export default {
    },
    data: function () {
       return {
-         succes: false
+         success: false
+      }
+   },
+   computed: {
+      response() {
+         return this.$store.state.payment_response
       }
    }
 };

@@ -1,11 +1,9 @@
 <template>
   <form @submit.prevent="onSubmit" class="mobile_recharge_form">
-    <dialog :open="true" class="modal-dialog plans_dialog" >
-        <ul class="list-group">
-            <li class="list-group-item">
-                {{plans}}
-            </li>
-        </ul>
+    <dialog :open="openPlansModal" class="modal-dialog plans_dialog">
+      <ul class="list-group">
+        <li class="list-group-item">{{plans}}</li>
+      </ul>
     </dialog>
     <div class="container">
       <div class="row">
@@ -23,8 +21,8 @@
               <option
                 v-for="(option, i) in operators"
                 :key="i"
-                :value="option.value"
-                v-text="option.label"
+                :value="option.id"
+                v-text="option.name"
               ></option>
             </select>
           </div>
@@ -58,23 +56,53 @@ export default {
     };
   },
   methods: {
+     async generateOrder(values) {
+        return new Promise(async (resolve, reject) => {
+            try {
+                const { data } = await this.$http.post(
+                    "/wp-json/app/electricity_order_create",
+                    values
+                );
+                if(data.ok) {
+                    resolve(data.data)
+                } else {
+                    reject(data)
+                }
+            } catch (error) {
+                reject(error)
+            }
+        })
+    },
     showPlans() {
       this.openPlansModal = true;
     },
     async onSubmit() {
       // return;
-      this.$store.dispatch("setNewOrder", this.values);
+      const values = {
+         ...this.values,
+      }
+      const order = await this.generateOrder(values)
+      this.$store.dispatch("setNewOrder", {
+         ...this.values,
+         order_id: order
+      });
       this.$router.push("payment");
     },
     async fetchProviders() {
-      try {
-        const { data } = await this.$http.get(
-          "/wp-json/app/get_mobile_providers"
-        );
-        this.operators = data.data;
-      } catch (error) {
-        console.log({ error });
-      }
+      return new Promise(async (resolve, reject) => {
+        try {
+          const { data } = await this.$http.get(
+            "/wp-json/app/get_mobile_providers"
+          );
+          if (data.ok) {
+            resolve(data.data);
+          } else {
+            reject(data.errors);
+          }
+        } catch ({ message }) {
+          reject({ message });
+        }
+      });
     },
     async fetchPlans() {
       try {
@@ -85,14 +113,14 @@ export default {
       }
     }
   },
-  created() {
-    this.fetchProviders();
+  async created() {
+    this.operators = await this.fetchProviders();
   }
 };
 </script>
 <style scoped>
 .plans_dialog {
-    border: 0;
-    box-shadow: 0 0 150px #ccc
+  border: 0;
+  box-shadow: 0 0 150px #ccc;
 }
 </style>

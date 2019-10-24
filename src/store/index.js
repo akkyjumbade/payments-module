@@ -1,10 +1,12 @@
 import Vue from 'vue'
 import Vuex from 'vuex'
+import recharge from './recharge'
 Vue.use(Vuex)
 
 const store = new Vuex.Store({
     state: {
         order: null,
+        user: null,
         gateway: null,
         payment_methods: null,
         payment_response: null,
@@ -22,24 +24,28 @@ const store = new Vuex.Store({
         set_payment_response(state, payload) {
             state.payment_response = payload
         },
+        set_customer(state, payload) {
+            state.user = payload
+        },
     },
     actions: {
         async setNewOrder(context, data) {
             context.commit('set_order', data)
         },
+        async setPaymentResponse(context, data) {
+            context.commit('set_payment_response', data)
+        },
+        async setCustomer(context, data) {
+            context.commit('set_customer', data)
+        },
+        async doMobileRecharge(context, data) {
+            const response = await recharge(data)
+            context.commit('do_mobile_recharge', response)
+        },
         async setGatewayApi(context, apiKey) {
             var options = {
                 key: apiKey,
-                // amount
                 currency: "INR",
-                // order_id: this.orderId,
-                //This is a sample Order ID. Create an Order using Orders API. (https://razorpay.com/docs/payment-gateway/orders/integration/#step-1-create-an-order). Refer the Checkout form table given below
-                handler: response => {
-                    context.commit('set_payment_response', response);
-                },
-                notes: {
-                    // address: context.state.order
-                }
             };
             const api = new window.Razorpay(options);
             context.commit('set_gateway', api)
@@ -50,4 +56,13 @@ const store = new Vuex.Store({
     }
 })
 store.dispatch('setGatewayApi', 'rzp_live_nXRYq90cXI0BAG')
+if(window.customer) {
+    store.dispatch('setCustomer', window.customer)
+}
+store.dispatch('setCustomer', {
+    name: 'Akshay Jumbade',
+    email: 'akshay.jumbade@hotmail.com',
+    phone: '9930207580',
+    orderNote: 'Order note'
+})
 export default store

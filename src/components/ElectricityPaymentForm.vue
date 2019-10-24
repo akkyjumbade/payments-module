@@ -47,22 +47,9 @@
   </div>
 </template>
 <script>
-// import { async } from 'q';
-// import Axios from 'axios'
-const popupCustomClass = {
-    header: 'text-left',
-    title: 'text-left',
-    content: 'text-left text',
-    footer: 'text-left text',
-    input: 'form-control',
-}
+import { Modal } from '../helpers';
 import Swal from 'sweetalert2'
-Swal.mixin({
-    animation: false,
-    buttonsStyling: false,
-    showConfirmButton: false,
-    customClass: popupCustomClass
-})
+
 export default {
   props: {
     operators: {
@@ -89,11 +76,12 @@ export default {
     };
   },
   methods: {
-    async generateOrder() {
+    async generateOrder(values) {
         return new Promise(async (resolve, reject) => {
             try {
-                const { data } = await this.$http.get(
-                    "/wp-json/app/electricity_order_create"
+                const { data } = await this.$http.post(
+                    "/wp-json/app/electricity_order_create",
+                    values
                 );
                 if(data.ok) {
                     resolve(data.data)
@@ -123,32 +111,51 @@ export default {
     },
     async onPaymentClicked() {
         this.loading = true
-        const fetching = Swal.fire({
+        const fetching = Modal.fire({
             title: 'Fetching your bill details...',
         })
-        const bill = await this.fetchBill();
-        if(!bill) {
-            // bill not found
-            // alert('')
-            return
-        }
-        fetching.close()
-        Swal.fire({
-            title: 'Bill details',
-            html: `
-            Customer name: ${bill.name}<br>
-            Amount: ${bill.amount}<br>
-            Due date: ${bill.duedate}<br>
-            `,
-            confirmButtonText: 'Pay Now',
-        }).then(result => {
-            if(result) {
-                const order = await this.generateOrder()
-                this.$store.dispatch('setNewOrder', order)
-                this.$router.push({path: '/payment'})
-            }
-        })
+        try {
+            const bill = await this.fetchBill();
+            fetching.close()
+            Modal.fire({
+                title: 'Bill details',
+                html: `
+                Customer name: ${bill.name}<br>
+                Amount: ${bill.amount}<br>
+                Due date: ${bill.duedate}<br>
+                `,
+                showConfirmButton: true,
+                confirmButtonText: 'Pay Now',
+            }).then(async result => {
+                if(result) {
+                    try {
+                        const values = {
+                            ...this.values,
+                            ...bill,
+                        }
+                        const order = await this.generateOrder(values)
+                        this.$store.dispatch('setNewOrder', {
+                            ...values,
+                            order_id: order,
+                        })
+                        this.$router.push({path: '/payment'})
+                    } catch (error) {
+                        this.loading = false
+                        Swal.fire({
+                            title: 'Unable to process order, try again!'
+                        })
+                    }
 
+                }
+            })
+        } catch (error) {
+            fetching.close()
+            Modal.fire({
+                icon: 'error',
+                title: 'Failed fetching your bill details',
+                timeout: 3000
+            })
+        }
     },
     async doBillPayment(response) {
       let formdata = {

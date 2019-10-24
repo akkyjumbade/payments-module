@@ -1,5 +1,6 @@
 <template>
    <div class="payment_form" :class="{'is_submitting': isSubmitting}">
+       {{order}}
       <ul class="paymentModes nav nav-pills">
          <li :class="{'active': (tab == 'card')}">
             <a href="#" @click.prevent="tab = 'card'">Debit/ Credit Card</a>
@@ -12,14 +13,18 @@
          </li>
       </ul>
       <div>
-         <form v-if="tab == 'card'" @submit.prevent="cardPayment">
+         <div v-if="tab == 'card'" >
             <legend>Enter Card Details</legend>
+            <div class="form-group">
+               <label>Name on card</label>
+               <input class="form-control" v-model="values.name_on_card" placeholder="Name on card" >
+            </div>
             <div class="form-group">
                <label>Card number</label>
                <input class="form-control" v-model="values.card_number" placeholder="Enter Debit / Credit Card Number" >
             </div>
             <div class="row">
-               <div class="form-group col-sm-4">
+               <div class="form-group col-xs-4">
                   <label>Expiry Month</label>
                   <select class="form-control" v-model="values.card_exp_month">
                      <option disabled value="">MM</option>
@@ -28,13 +33,16 @@
                      </option>
                   </select>
                </div>
-               <div class="form-group col-sm-4">
+               <div class="form-group col-xs-4">
                   <label>Expiry Year</label>
                   <select class="form-control" v-model="values.card_exp_year">
                      <option value="">YY</option>
+                     <option v-for="(option, i) in years" :key="i" :value="option.toString().replace('20', '')">
+                        {{option}}
+                     </option>
                   </select>
                </div>
-               <div class="form-group col-sm-4">
+               <div class="form-group col-xs-4">
                   <label>Enter CVV</label>
                   <input class="form-control" placeholder="***" v-model="values.cvv">
                </div>
@@ -46,8 +54,8 @@
                </label>
                <!-- Save this card for faster checkout -->
             </div>
-            <button :disabled="isSubmitting" class="btn btn-primary btn-color">Pay Now</button>
-         </form>
+            <button :disabled="isSubmitting" @click.prevent="cardPayment" class="btn btn-primary btn-color">Pay Now</button>
+         </div>
          <form v-if="tab == 'upi'" @submit.prevent="onPayment">
             <div class="form-group">
                <label>Enter UPI Id</label>
@@ -116,30 +124,95 @@ const months = [
       value: '12',
    },
 ]
+let years = []
+var min = new Date().getFullYear(),
+   max = min + 30
+for (var i = min; i<=max; i++){
+    years.push(i)
+}
+import gateway from '../gateway'
+
 export default {
    data: function () {
       return {
          tab: 'card',
          months,
+         years,
          values: {},
          isSubmitting: false,
          errors: null,
       }
    },
+   computed: {
+       order() {
+           return this.$store.state.order
+       },
+       user() {
+           return this.$store.state.user
+       },
+       cardExpiry() {
+           if(this.tab == 'card') {
+              return this.values.card_exp_month + '/' + this.values.card_exp_year
+           }
+           return ''
+       },
+   },
    methods: {
       async cardPayment() {
          this.isSubmitting = true
-         const values = this.values
+         const card = {
+            expiry_month: this.values.card_exp_month,
+            expiry_year: this.values.card_exp_year,
+            number: this.values.card_number,
+            cvv: this.values.cvv,
+            name: this.values.name_on_card,
+            // save: this.values.save_card ? 1: 0
+         }
          try {
-            const {data} = await this.$http.post('/wp-json/app/recharge_card_payment', values)
-            console.log({data})
+            const paymentData = {
+               order_id: this.order.order_id,
+               currency: "INR",
+               email: this.user.email,
+               contact: this.user.phone,
+               amount: Math.round(this.order.amount) * 100,
+               notes: {
+                  address: this.user.orderNote,
+               },
+               method: 'card',
+               card
+            }
+            // debugger
+            const razorpay = new gateway({
+
+            })
+            razorpay.createPayment(paymentData)
+            razorpay.on('payment.success', response => {
+               // proceed to pay
+               this.$store.dispatch('setPaymentResponse', {
+                  ...response,
+                  statusCode: 'success',
+               })
+               this.$store.dispatch('doMobileRecharge', {
+                  phone: this.order.phone,
+                  amount: this.order.amount,
+                  provider_id: this.order.operator,
+               })
+            })
+            razorpay.on('payment.error', response => {
+                this.$store.dispatch('setPaymentResponse', {
+                   ...response,
+                  statusCode: 'failed',
+                })
+            })
+
+
             this.isSubmitting = false
             this.$router.push('payment_response')
          } catch (error) {
             this.isSubmitting = false
-            this.$router.push('payment_response', {
-               error
-            })
+            // this.$router.push('payment_response', {
+            //    error
+            // })
             console.log({error})
          }
       },
@@ -156,6 +229,9 @@ export default {
 
          // }
       }
+   },
+   mounted() {
+
    }
 }
 </script>
