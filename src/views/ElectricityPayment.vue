@@ -3,7 +3,7 @@
       <div class="container">
          <div class="row">
             <div class="col-sm-6">
-               <ElectricityPaymentForm :user="user" :operators="operators" />
+               <ElectricityPaymentForm :user="user" v-if="operators" :operators="operators" />
             </div>
          </div>
       </div>
@@ -29,7 +29,7 @@ export default {
     async fetchOperators() {
       try {
         const { data } = await this.$http.get(
-          "/wp-json/app/fetch_electricity_operators"
+          "/wp-json/app/fetch-operators/electricity"
         );
         if (data.ok) {
           this.operators = data.data;

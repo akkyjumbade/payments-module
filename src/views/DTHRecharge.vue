@@ -1,6 +1,6 @@
 <template>
    <div>
-      <DTHRechargeForm />
+      <DTHRechargeForm v-if="operators" :operators="operators" />
    </div>
 </template>
 <script>
@@ -9,13 +9,29 @@ export default {
    components: {
       DTHRechargeForm
    },
+   data: function() {
+      return {
+         operators: null
+      }
+   },
    methods: {
       async fetchProviders() {
-
+         try {
+            const { data } = await this.$http.get(
+               "/wp-json/app/fetch-operators/dth"
+            );
+            if (data.ok) {
+               this.operators = data.data;
+            } else {
+               console.warn({ data });
+            }
+         } catch (error) {
+            console.warn({ error });
+         }
       }
    },
    created() {
-
+      this.fetchProviders()
    }
 };
 </script>

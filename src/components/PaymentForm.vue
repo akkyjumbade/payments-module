@@ -8,9 +8,9 @@
          <li :class="{'active': (tab == 'upi')}">
             <a href="#" @click.prevent="tab = 'upi'">UPI</a>
          </li>
-         <li :class="{'active': (tab == 'wallet')}">
+         <!-- <li :class="{'active': (tab == 'wallet')}">
             <a href="#" @click.prevent="tab = 'wallet'">Wallet</a>
-         </li>
+         </li> -->
       </ul>
       <div>
          <div v-if="tab == 'card'" >
@@ -47,19 +47,15 @@
                   <input class="form-control" placeholder="***" v-model="values.cvv">
                </div>
             </div>
-            <div class="checkbox">
-               <label>
-                  <input type="checkbox" name="save_card" v-model="values.save_card">
-                  <span>Save this card for faster checkout</span>
-               </label>
-               <!-- Save this card for faster checkout -->
+            <div class="form-group">
+               <button :disabled="isSubmitting" @click.prevent="cardPayment" class="btn btn-primary btn-color">Pay Now</button>
+               <button @click.prevent="cancelPayment" class="btn btn-default">Cancel</button>
             </div>
-            <button :disabled="isSubmitting" @click.prevent="cardPayment" class="btn btn-primary btn-color">Pay Now</button>
          </div>
-         <form v-if="tab == 'upi'" @submit.prevent="onPayment">
+         <form v-if="tab == 'upi'" @submit.prevent="onUPIPayment">
             <div class="form-group">
                <label>Enter UPI Id</label>
-               <input class="form-control" >
+               <input class="form-control" v-model="values.vpaAddress" >
             </div>
             <button class="btn btn-primary">Submit</button>
          </form>
@@ -71,6 +67,7 @@
             <button class="btn btn-primary">Submit</button>
          </form>
       </div>
+      {{paymentData}}
    </div>
 </template>
 <script>
@@ -131,8 +128,23 @@ for (var i = min; i<=max; i++){
     years.push(i)
 }
 import gateway from '../gateway'
+const razorpay = new gateway({})
 
 export default {
+   props: {
+      order: {
+         type: [Object],
+         required: true,
+      },
+      user: {
+         type: [Object],
+         required: true,
+      },
+      paymentMethods: {
+         type: [Object],
+         required: true,
+      },
+   },
    data: function () {
       return {
          tab: 'card',
@@ -141,23 +153,72 @@ export default {
          values: {},
          isSubmitting: false,
          errors: null,
+         paymentData: {
+
+         }
       }
    },
-   computed: {
-       order() {
-           return this.$store.state.order
-       },
-       user() {
-           return this.$store.state.user
-       },
-       cardExpiry() {
-           if(this.tab == 'card') {
-              return this.values.card_exp_month + '/' + this.values.card_exp_year
-           }
-           return ''
-       },
-   },
    methods: {
+      async handlePayment(responseFromApi) {
+         const {statusCode} = responseFromApi
+         if(statusCode == 'success') {
+            const order = this.order;
+            try {
+               const paidOrder = await this.processOrder(order.service, responseFromApi)
+               this.$store.dispatch('setPaymentResponse', {
+                  ...paidOrder,
+                  transactionStatus: 'completed',
+               })
+            } catch (error) {
+               this.$store.dispatch('setPaymentResponse', {
+                  ...responseFromApi,
+                  ...error,
+                  transactionStatus: 'completed',
+               })
+               this.$router.push({path: 'payment_response'})
+            }
+         } else {
+            this.$store.dispatch('setPaymentResponse', {
+               ...responseFromApi,
+               transactionStatus: 'failed',
+            })
+            this.$router.push({path: 'payment_response'})
+         }
+      },
+      async processOrder(service, payload) {
+         return new Promise(async (resolve, reject) => {
+            try {
+               const {data} = await this.$http.post('/wp-json/app/pay-for/'+service, {
+                  ...payload,
+                  ...this.order,
+               })
+               if(data.ok) {
+                  resolve(data.data)
+               } else {
+                  reject(data)
+               }
+               console.log({data})
+            } catch (error) {
+               reject(error)
+               console.log({error})
+            }
+         })
+      },
+      async onUPIPayment() {
+         this.isSubmitting = true
+         this.paymentData = {
+            order_id: this.order.order_id,
+            email: this.user.email,
+            contact: this.user.phone,
+            amount: Math.round(this.order.amount) * 100,
+            notes: {
+               address: this.user.orderNote,
+            },
+            method: 'upi',
+            vpa: this.values.vpaAddress,
+         }
+         razorpay.createPayment(this.paymentData)
+      },
       async cardPayment() {
          this.isSubmitting = true
          const card = {
@@ -169,7 +230,7 @@ export default {
             // save: this.values.save_card ? 1: 0
          }
          try {
-            const paymentData = {
+            this.paymentData = {
                order_id: this.order.order_id,
                currency: "INR",
                email: this.user.email,
@@ -181,57 +242,38 @@ export default {
                method: 'card',
                card
             }
-            // debugger
-            const razorpay = new gateway({
-
-            })
-            razorpay.createPayment(paymentData)
-            razorpay.on('payment.success', response => {
-               // proceed to pay
-               this.$store.dispatch('setPaymentResponse', {
-                  ...response,
-                  statusCode: 'success',
-               })
-               this.$store.dispatch('doMobileRecharge', {
-                  phone: this.order.phone,
-                  amount: this.order.amount,
-                  provider_id: this.order.operator,
-               })
-            })
-            razorpay.on('payment.error', response => {
-                this.$store.dispatch('setPaymentResponse', {
-                   ...response,
-                  statusCode: 'failed',
-                })
-            })
-
-
-            this.isSubmitting = false
-            this.$router.push('payment_response')
+            razorpay.createPayment(this.paymentData)
          } catch (error) {
             this.isSubmitting = false
-            // this.$router.push('payment_response', {
-            //    error
-            // })
             console.log({error})
          }
-      },
-      async upiPayment() {
-
       },
       async walletPayment() {
 
       },
-      async checkValidation() {
-         // try {
-         //    const {data} = await this.$http.post('/wp-json/')
-         // } catch (error) {
-
-         // }
+      cancelPayment() {
+         this.$store.dispatch('cancelOrder')
+         this.$router.push({
+            path: '/'
+         })
       }
    },
    mounted() {
-
+      razorpay.on('payment.success', response => {
+         this.isSubmitting = false
+         // proceed to pay
+         this.$store.dispatch('setPaymentResponse', this.handlePayment({
+            ...response,
+            statusCode: 'success',
+         }))
+      })
+      razorpay.on('payment.error', response => {
+         this.isSubmitting = false
+         this.$store.dispatch('setPaymentResponse', this.handlePayment({
+            ...response,
+            statusCode: 'failed',
+         }))
+      })
    }
 }
 </script>

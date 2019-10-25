@@ -1,6 +1,6 @@
 <template>
   <div class="mobile_recharge_form">
-    <div v-if="operators">
+    <div >
       <div class="form-group">
         <label for>Select Operator</label>
         <v-select :options="operators" v-model="values.provider_id" label="name" value="id">

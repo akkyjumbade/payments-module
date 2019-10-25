@@ -32,6 +32,9 @@ const store = new Vuex.Store({
         async setNewOrder(context, data) {
             context.commit('set_order', data)
         },
+        async cancelOrder(context) {
+            context.commit('set_order', null)
+        },
         async setPaymentResponse(context, data) {
             context.commit('set_payment_response', data)
         },

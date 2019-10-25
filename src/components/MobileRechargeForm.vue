@@ -41,37 +41,50 @@
         <button class="btn btn-primary">Recharge</button>
       </div>
     </div>
-    {{providers}}
   </form>
 </template>
 <script>
 export default {
+  props: {
+    operators: {
+      type: [Array, Object],
+      required: true
+    },
+    user: {
+      type: [Object],
+      required: true
+    },
+    orderNote: {
+      type: [String],
+      default: "Mobile recharge"
+    }
+  },
   data: function() {
     return {
-      operators: [],
       values: {},
       isSubmitting: false,
       openPlansModal: false,
+      plans: [],
       errors: null
     };
   },
   methods: {
-     async generateOrder(values) {
-        return new Promise(async (resolve, reject) => {
-            try {
-                const { data } = await this.$http.post(
-                    "/wp-json/app/electricity_order_create",
-                    values
-                );
-                if(data.ok) {
-                    resolve(data.data)
-                } else {
-                    reject(data)
-                }
-            } catch (error) {
-                reject(error)
-            }
-        })
+    async generateOrder(values) {
+      return new Promise(async (resolve, reject) => {
+        try {
+          const { data } = await this.$http.post(
+            "/wp-json/app/create-order/mobile",
+            values
+          );
+          if (data.ok) {
+            resolve(data.data);
+          } else {
+            reject(data);
+          }
+        } catch (error) {
+          reject(error);
+        }
+      });
     },
     showPlans() {
       this.openPlansModal = true;
@@ -79,30 +92,15 @@ export default {
     async onSubmit() {
       // return;
       const values = {
-         ...this.values,
-      }
-      const order = await this.generateOrder(values)
+        ...this.values
+      };
+      const order = await this.generateOrder(values);
       this.$store.dispatch("setNewOrder", {
-         ...this.values,
-         order_id: order
+        ...this.values,
+        order_id: order,
+        service: 'mobile'
       });
       this.$router.push("payment");
-    },
-    async fetchProviders() {
-      return new Promise(async (resolve, reject) => {
-        try {
-          const { data } = await this.$http.get(
-            "/wp-json/app/get_mobile_providers"
-          );
-          if (data.ok) {
-            resolve(data.data);
-          } else {
-            reject(data.errors);
-          }
-        } catch ({ message }) {
-          reject({ message });
-        }
-      });
     },
     async fetchPlans() {
       try {
@@ -113,9 +111,6 @@ export default {
       }
     }
   },
-  async created() {
-    this.operators = await this.fetchProviders();
-  }
 };
 </script>
 <style scoped>
